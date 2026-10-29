@@ -13,7 +13,14 @@ const addRankedResults = (scores, results) => {
 
 // runs keyword (Atlas Search) + semantic (Atlas Vector Search) queries and merges them via RRF
 const hybridSearchProducts = async (query, limit = 10) => {
-    const queryEmbedding = await getEmbedding(query)
+
+    // Gemini is optional - if the embedding call fails, fall back to keyword search only
+    let queryEmbedding = null
+    try {
+        queryEmbedding = await getEmbedding(query)
+    } catch (error) {
+        console.log("Embeddings unavailable, using keyword search only:", error.message);
+    }
 
     const [keywordResults, semanticResults] = await Promise.all([
         productModel.aggregate([
@@ -29,7 +36,7 @@ const hybridSearchProducts = async (query, limit = 10) => {
             { $limit: 20 },
             { $project: { _id: 1 } }
         ]),
-        productModel.aggregate([
+        queryEmbedding ? productModel.aggregate([
             {
                 $vectorSearch: {
                     index: "product_vector_index",
@@ -40,7 +47,7 @@ const hybridSearchProducts = async (query, limit = 10) => {
                 }
             },
             { $project: { _id: 1 } }
-        ])
+        ]) : []
     ])
 
     const scores = new Map()

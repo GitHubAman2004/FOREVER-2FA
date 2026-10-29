@@ -1,4 +1,4 @@
-const CHAT_MODEL = "llama-3.3-70b-versatile"
+const CHAT_MODEL = "openai/gpt-oss-120b"
 
 // sends a prompt to Groq and returns the generated text
 const generateAnswer = async (prompt) => {

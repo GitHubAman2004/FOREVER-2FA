@@ -2,6 +2,11 @@ import { v2 as cloudinary } from "cloudinary"
 import productModel from "../models/productModel.js"
 import getEmbedding from "../utils/embeddings.js"
 import hybridSearchProducts from "../utils/hybridSearch.js"
+import { getCache, setCache, deleteCache } from "../utils/cache.js"
+
+const PRODUCT_CACHE_TTL = 10 * 60   // seconds, upper bound on staleness if an invalidation is ever missed
+const PRODUCT_LIST_KEY = 'products:list'
+const productKey = (id) => `products:single:${id}`
 
 // function for add product
 const addProduct = async (req, res) => {
@@ -23,7 +28,14 @@ const addProduct = async (req, res) => {
             })
         )
 
-        const embedding = await getEmbedding(`${name} ${description}`)
+        // Gemini is optional - save the product without an embedding if the call fails,
+        // scripts/backfillEmbeddings.js adds it once the key works
+        let embedding
+        try {
+            embedding = await getEmbedding(`${name} ${description}`)
+        } catch (error) {
+            console.log("Embeddings unavailable, saving product without one:", error.message);
+        }
 
         const productData = {
             name,
@@ -42,6 +54,7 @@ const addProduct = async (req, res) => {
 
         const product = new productModel(productData);
         await product.save()
+        await deleteCache(PRODUCT_LIST_KEY)
 
         res.json({ success: true, message: "Product Added" })
 
@@ -54,8 +67,14 @@ const addProduct = async (req, res) => {
 // function for list product
 const listProducts = async (req, res) => {
     try {
-        
+
+        const cached = await getCache(PRODUCT_LIST_KEY)
+        if (cached) {
+            return res.json({success:true,products:cached})
+        }
+
         const products = await productModel.find({});
+        await setCache(PRODUCT_LIST_KEY, products, PRODUCT_CACHE_TTL)
         res.json({success:true,products})
 
     } catch (error) {
@@ -69,6 +88,7 @@ const removeProduct = async (req, res) => {
     try {
         
         await productModel.findByIdAndDelete(req.body.id)
+        await deleteCache(PRODUCT_LIST_KEY, productKey(req.body.id))
         res.json({success:true,message:"Product Removed"})
 
     } catch (error) {
@@ -82,7 +102,17 @@ const singleProduct = async (req, res) => {
     try {
         
         const { productId } = req.body
+
+        const cached = await getCache(productKey(productId))
+        if (cached) {
+            return res.json({success:true,product:cached})
+        }
+
         const product = await productModel.findById(productId)
+        // don't cache a miss, the id might be added later
+        if (product) {
+            await setCache(productKey(productId), product, PRODUCT_CACHE_TTL)
+        }
         res.json({success:true,product})
 
     } catch (error) {
