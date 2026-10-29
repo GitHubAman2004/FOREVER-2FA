@@ -28,7 +28,14 @@ const addProduct = async (req, res) => {
             })
         )
 
-        const embedding = await getEmbedding(`${name} ${description}`)
+        // Gemini is optional - save the product without an embedding if the call fails,
+        // scripts/backfillEmbeddings.js adds it once the key works
+        let embedding
+        try {
+            embedding = await getEmbedding(`${name} ${description}`)
+        } catch (error) {
+            console.log("Embeddings unavailable, saving product without one:", error.message);
+        }
 
         const productData = {
             name,
