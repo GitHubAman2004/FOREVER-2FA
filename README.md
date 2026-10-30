@@ -2,6 +2,8 @@
 
 Forever e-commerce store (customer site, admin panel and Node/Express backend) with two-factor login: after the password is checked, a 6 digit code is emailed to the user and must be entered to finish signing in.
 
+📘 **New here or debugging login/email?** Read [LEARNING-NOTES.md](LEARNING-NOTES.md). It walks through every problem we hit getting 2FA working on the live site, how each was fixed, and where every setting lives.
+
 ## Project layout
 
 - `frontend` - customer website (React + Vite)
