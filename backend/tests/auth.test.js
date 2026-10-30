@@ -56,6 +56,20 @@ describe('register', () => {
         expect(res.body.success).toBe(false)
         expect(res.body.message).toBe('User already exists')
     })
+
+    it('treats the same email in different case as a duplicate', async () => {
+        await register()
+        const res = await register({ ...user, email: ' Test@Example.com ' })
+        expect(res.body.success).toBe(false)
+        expect(res.body.message).toBe('User already exists')
+    })
+
+    it('answers "User already exists" when two sign ups race', async () => {
+        const results = await Promise.all([register(), register(), register()])
+        const failed = results.filter(r => !r.body.success)
+        expect(results.filter(r => r.body.success)).toHaveLength(1)
+        failed.forEach(r => expect(r.body.message).toBe('User already exists'))
+    })
 })
 
 describe('login', () => {
@@ -65,6 +79,13 @@ describe('login', () => {
         expect(res.body.success).toBe(false)
         expect(res.body.message).toBe('Invalid credentials')
         expect(sendOtpEmail).not.toHaveBeenCalled()
+    })
+
+    it('finds the account whatever the email case', async () => {
+        await register()
+        const res = await login({ ...user, email: 'TEST@example.com' })
+        expect(res.body.success).toBe(true)
+        expect(res.body.twoFactorRequired).toBe(true)
     })
 
     it('rejects an unknown user', async () => {

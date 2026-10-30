@@ -10,6 +10,13 @@ const OTP_EXPIRY_MINUTES = 10      // how long a code stays valid
 const OTP_MAX_ATTEMPTS = 5         // wrong codes allowed before the challenge dies
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000
 
+// match emails ignoring upper/lower case, so Amol@x.com and amol@x.com are the same account
+const EMAIL_COLLATION = { locale: 'en', strength: 2 }
+
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
+
+const findUserByEmail = (email) => userModel.findOne({ email: normalizeEmail(email) }).collation(EMAIL_COLLATION)
+
 const createToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET)
 }
@@ -95,7 +102,7 @@ const loginUser = async (req, res) => {
 
         const { email, password } = req.body;
 
-        const user = await userModel.findOne({ email });
+        const user = await findUserByEmail(email);
 
         if (!user) {
             return res.json({ success: false, message: "User doesn't exists" })
@@ -210,10 +217,11 @@ const resendLoginOtp = async (req, res) => {
 const registerUser = async (req, res) => {
     try {
 
-        const { name, email, password } = req.body;
+        const { name, password } = req.body;
+        const email = normalizeEmail(req.body.email);
 
         // checking user already exists or not
-        const exists = await userModel.findOne({ email });
+        const exists = await findUserByEmail(email);
         if (exists) {
             return res.json({ success: false, message: "User already exists" })
         }
@@ -244,6 +252,10 @@ const registerUser = async (req, res) => {
 
     } catch (error) {
         console.log(error);
+        // two sign up requests for the same email can race past the check above
+        if (error.code === 11000) {
+            return res.json({ success: false, message: "User already exists" })
+        }
         res.json({ success: false, message: error.message })
     }
 }
