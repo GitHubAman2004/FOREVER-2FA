@@ -21,9 +21,22 @@ Forever e-commerce store (customer site, admin panel and Node/Express backend) w
 
 ## Email setup (required for login)
 
-Every login sends a verification code by email, so the backend needs an SMTP account. Without it, login shows *"Email service is not configured"*.
+Every login sends a verification code by email. Without email settings, login shows *"Email service is not configured"*.
 
-Using Gmail:
+### Option 1: Brevo (use this on Render's free plan)
+
+Render's free plan blocks normal email sending (SMTP ports 25, 465 and 587), so Gmail settings time out there. Brevo sends over normal HTTPS instead and has a free plan.
+
+1. Sign up at [brevo.com](https://www.brevo.com).
+2. Go to **Senders, Domains & Dedicated IPs -> Senders**, add the address the codes should come from (your Gmail is fine) and click the link Brevo emails you to verify it.
+3. Go to **SMTP & API -> API Keys**, create a key and copy it (it starts with `xkeysib-`).
+4. Set these on the backend (Render: your service -> **Environment**; locally: `backend/.env`):
+   ```
+   BREVO_API_KEY=xkeysib-...
+   EMAIL_FROM=Forever <the.address.you.verified@gmail.com>
+   ```
+
+### Option 2: Gmail SMTP (local or paid hosting)
 
 1. Turn on 2-Step Verification for the Gmail account that will send the codes.
 2. Open Google Account -> Security -> **App passwords** and create one. Copy the 16 character password.
@@ -34,15 +47,20 @@ Using Gmail:
    SMTP_USER=your.address@gmail.com
    SMTP_PASS=the 16 character app password
    ```
-4. Check that it works (the address at the end is optional and receives a test mail):
-   ```bash
-   cd backend
-   npm run check-email -- your.address@gmail.com
-   ```
 
-### On Vercel
+If `BREVO_API_KEY` is set it is used, otherwise SMTP.
 
-Add the same four `SMTP_*` variables to the **backend** project under Settings -> Environment Variables, then redeploy it. Vercel only picks up new variables on a new deployment.
+### Check the settings
+
+The address at the end is optional and receives a test mail:
+```bash
+cd backend
+npm run check-email -- your.address@gmail.com
+```
+
+### On Render
+
+Add the variables under your backend service -> **Environment** and save. Render restarts the service with the new values (if it doesn't, use **Manual Deploy -> Deploy latest commit**).
 
 ## Tests
 

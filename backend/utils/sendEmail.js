@@ -1,5 +1,10 @@
 import nodemailer from 'nodemailer'
 
+const BREVO_URL = 'https://api.brevo.com/v3/smtp/email'
+
+// give up quickly instead of leaving the login request hanging
+const EMAIL_TIMEOUT_MS = 15000
+
 let transporter = null
 
 const getTransporter = () => {
@@ -11,7 +16,7 @@ const getTransporter = () => {
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env
 
     if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-        throw new Error('Email service is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASS in your .env file')
+        throw new Error('Email service is not configured. Set BREVO_API_KEY and EMAIL_FROM (or SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASS) in your environment variables')
     }
 
     const port = Number(SMTP_PORT) || 587
@@ -24,15 +29,73 @@ const getTransporter = () => {
         auth: {
             user: SMTP_USER,
             pass: SMTP_PASS
-        }
+        },
+        connectionTimeout: EMAIL_TIMEOUT_MS,
+        greetingTimeout: EMAIL_TIMEOUT_MS,
+        socketTimeout: EMAIL_TIMEOUT_MS
     })
 
     return transporter
 }
 
+// "Forever <shop@x.com>" -> { name: 'Forever', email: 'shop@x.com' }
+const parseAddress = (value) => {
+    const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value)
+    return match ? { name: match[1] || 'Forever', email: match[2].trim() } : { name: 'Forever', email: value.trim() }
+}
+
+// Brevo's API goes over normal HTTPS, so it works on hosts that block SMTP ports (like Render's free plan)
+const sendWithBrevo = async ({ from, to, subject, html, text }) => {
+
+    if (!from) {
+        throw new Error('Email service is not configured. Set EMAIL_FROM to the sender address you verified in Brevo')
+    }
+
+    const response = await fetch(BREVO_URL, {
+        method: 'POST',
+        headers: {
+            'api-key': process.env.BREVO_API_KEY,
+            'content-type': 'application/json',
+            accept: 'application/json'
+        },
+        body: JSON.stringify({
+            sender: parseAddress(from),
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+            textContent: text
+        }),
+        signal: AbortSignal.timeout(EMAIL_TIMEOUT_MS)
+    })
+
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(`Could not send the email (Brevo ${response.status}: ${body.message || response.statusText})`)
+    }
+
+    return await response.json()
+}
+
+const sendWithSmtp = async ({ from, to, subject, html, text }) => {
+    try {
+        return await getTransporter().sendMail({ from, to, subject, html, text })
+    } catch (error) {
+        if (['ETIMEDOUT', 'ECONNECTION', 'ESOCKET'].includes(error.code)) {
+            throw new Error('Could not reach the email server. Hosts like Render\'s free plan block SMTP, use BREVO_API_KEY instead')
+        }
+        throw error
+    }
+}
+
 const sendEmail = async ({ to, subject, html, text }) => {
-    const from = process.env.SMTP_FROM || `Forever <${process.env.SMTP_USER}>`
-    return await getTransporter().sendMail({ from, to, subject, html, text })
+
+    const { EMAIL_FROM, SMTP_FROM, SMTP_USER } = process.env
+    const from = EMAIL_FROM || SMTP_FROM || (SMTP_USER && `Forever <${SMTP_USER}>`)
+
+    if (process.env.BREVO_API_KEY) {
+        return await sendWithBrevo({ from, to, subject, html, text })
+    }
+    return await sendWithSmtp({ from, to, subject, html, text })
 }
 
 // 2FA code mail sent on every login attempt
