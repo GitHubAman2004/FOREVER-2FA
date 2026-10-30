@@ -142,9 +142,13 @@ const ShopContextProvider = (props) => {
     }, [])
 
     useEffect(() => {
-        if (!token && localStorage.getItem('token')) {
-            setToken(localStorage.getItem('token'))
-            getUserCart(localStorage.getItem('token'))
+        const savedToken = localStorage.getItem('token')
+        // older builds saved the text "undefined" when login answered without a token (2FA step), which faked a login
+        if (savedToken === 'undefined' || savedToken === 'null') {
+            localStorage.removeItem('token')
+        } else if (!token && savedToken) {
+            setToken(savedToken)
+            getUserCart(savedToken)
         }
         if (token) {
             getUserCart(token)

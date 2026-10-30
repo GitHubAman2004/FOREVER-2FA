@@ -5,6 +5,11 @@ import { toast } from 'react-toastify';
 
 const OTP_LENGTH = 6
 
+// small spinning circle shown inside a button while its request is running
+const Spinner = () => (
+  <span aria-hidden='true' className='inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin'></span>
+)
+
 const Login = () => {
 
   const [currentState, setCurrentState] = useState('Login');
@@ -13,7 +18,8 @@ const Login = () => {
   const [name,setName] = useState('')
   const [password,setPasword] = useState('')
   const [email,setEmail] = useState('')
-  const [loading,setLoading] = useState(false)
+  // which request is running: '', 'submit', 'verify' or 'resend'
+  const [loading,setLoading] = useState('')
 
   // two factor step
   const [otpToken,setOtpToken] = useState('')
@@ -44,7 +50,7 @@ const Login = () => {
 
   const onSubmitHandler = async (event) => {
       event.preventDefault();
-      setLoading(true)
+      setLoading('submit')
       try {
         if (currentState === 'Sign Up') {
 
@@ -75,7 +81,7 @@ const Login = () => {
         console.log(error)
         toast.error(error.message)
       } finally {
-        setLoading(false)
+        setLoading('')
       }
   }
 
@@ -86,7 +92,7 @@ const Login = () => {
         toast.error('Please enter the 6 digit code')
         return
       }
-      setLoading(true)
+      setLoading('verify')
       try {
 
         const response = await axios.post(backendUrl + '/api/user/verify-otp', {otpToken, otp})
@@ -105,7 +111,7 @@ const Login = () => {
         console.log(error)
         toast.error(error.message)
       } finally {
-        setLoading(false)
+        setLoading('')
       }
   }
 
@@ -113,7 +119,7 @@ const Login = () => {
       if (resendIn > 0 || loading) {
         return
       }
-      setLoading(true)
+      setLoading('resend')
       try {
 
         const response = await axios.post(backendUrl + '/api/user/resend-otp', {otpToken})
@@ -134,7 +140,7 @@ const Login = () => {
         console.log(error)
         toast.error(error.message)
       } finally {
-        setLoading(false)
+        setLoading('')
       }
   }
 
@@ -210,11 +216,15 @@ const Login = () => {
           </div>
           <div className='w-full flex justify-between text-sm mt-[-8px]'>
               <p onClick={backToLogin} className='cursor-pointer'>Back to login</p>
-              <p onClick={onResendHandler} className={resendIn > 0 ? 'text-gray-400' : 'cursor-pointer'}>
-                {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
+              <p onClick={onResendHandler} className={`inline-flex items-center gap-2 ${resendIn > 0 || loading ? 'text-gray-400' : 'cursor-pointer'}`}>
+                {loading === 'resend' && <Spinner />}
+                {loading === 'resend' ? 'Sending...' : resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
               </p>
           </div>
-          <button disabled={loading} className='bg-black text-white font-light px-8 py-2 mt-4 disabled:opacity-60'>{loading ? 'Verifying...' : 'Verify'}</button>
+          <button disabled={!!loading} className='inline-flex items-center justify-center gap-2 bg-black text-white font-light px-8 py-2 mt-4 disabled:opacity-60'>
+            {loading === 'verify' && <Spinner />}
+            {loading === 'verify' ? 'Verifying...' : 'Verify'}
+          </button>
       </form>
     )
   }
@@ -236,7 +246,12 @@ const Login = () => {
               : <p onClick={()=>setCurrentState('Login')} className=' cursor-pointer'>Login Here</p>
             }
         </div>
-        <button disabled={loading} className='bg-black text-white font-light px-8 py-2 mt-4 disabled:opacity-60'>{loading ? 'Please wait...' : currentState === 'Login' ? 'Sign In' : 'Sign Up'}</button>
+        <button disabled={!!loading} className='inline-flex items-center justify-center gap-2 bg-black text-white font-light px-8 py-2 mt-4 disabled:opacity-60'>
+          {loading === 'submit' && <Spinner />}
+          {loading === 'submit'
+            ? currentState === 'Login' ? 'Signing in...' : 'Creating account...'
+            : currentState === 'Login' ? 'Sign In' : 'Sign Up'}
+        </button>
     </form>
   )
 }
