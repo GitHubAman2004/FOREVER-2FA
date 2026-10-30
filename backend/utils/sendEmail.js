@@ -59,4 +59,4 @@ const sendOtpEmail = async ({ to, name, otp, expiryMinutes }) => {
     return await sendEmail({ to, subject, html, text })
 }
 
-export { sendEmail, sendOtpEmail }
+export { getTransporter, sendEmail, sendOtpEmail }
